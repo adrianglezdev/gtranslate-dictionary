@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name:       GTranslate Dictionary
- * Plugin URI:        https://github.com/adrianglezdev/gtranslate-dictionary
+ * Plugin URI:        https://github.com/adrianglezdev/gtranslate-dictionary/releases
  * Description:       Lets you define custom word and phrase overrides for GTranslate. Instead of relying solely on automatic translations, you can build a per-language dictionary from a visual interface — no coding required. Overrides are injected automatically on the frontend.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Author:            Adrián González
  * Author URI:        https://github.com/adrianglezdev
  * License:           GPL v2
@@ -17,10 +17,11 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'GTD_VERSION', '1.0.0' );
+define( 'GTD_VERSION', '1.1.0' );
 define( 'GTD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GTD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'GTD_OPTION_KEY', 'gtd_dictionary' );
+define( 'GTD_SOURCE_LANG_KEY', 'gtd_source_lang' );
 
 add_action( 'admin_menu', function () {
     add_menu_page(
@@ -42,17 +43,34 @@ add_action( 'admin_enqueue_scripts', function ( $hook ) {
 
     $dict = gtd_get_dictionary();
 
+    $source_lang = get_option( GTD_SOURCE_LANG_KEY, 'es' );
+
     wp_localize_script( 'gtd-admin', 'GTD', [
         'nonce'     => wp_create_nonce( 'gtd_save' ),
         'ajax_url'  => admin_url( 'admin-ajax.php' ),
         'langs'     => gtd_language_list(),
-        'dict_json' => wp_json_encode( $dict, JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT ),
+        'dict_json'   => wp_json_encode( $dict, JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT ),
+        'source_lang' => $source_lang,
         'strings'   => [
             'saved'       => __( 'Dictionary saved!', 'gtranslate-dictionary' ),
             'error'       => __( 'Error saving. Please try again.', 'gtranslate-dictionary' ),
             'confirm_del' => __( 'Delete this entry?', 'gtranslate-dictionary' ),
         ],
     ] );
+} );
+
+
+add_action( 'wp_ajax_gtd_save_source_lang', function () {
+    check_ajax_referer( 'gtd_save', 'nonce' );
+    if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Forbidden', 403 );
+
+    $lang = isset( $_POST['source_lang'] ) ? sanitize_key( $_POST['source_lang'] ) : 'es';
+    if ( ! $lang ) $lang = 'es';
+
+    update_option( GTD_SOURCE_LANG_KEY, $lang );
+    // Clear the dictionary when source language changes
+    update_option( GTD_OPTION_KEY, [] );
+    wp_send_json_success( $lang );
 } );
 
 add_action( 'wp_ajax_gtd_save', function () {
@@ -121,6 +139,7 @@ function gtd_language_list(): array {
         'ja' => 'Japanese (日本語)',
         'ar' => 'Arabic (العربية)',
         'pl' => 'Polski',
+        'es' => 'Español',
         'sv' => 'Svenska',
         'no' => 'Norsk',
         'da' => 'Dansk',
@@ -143,8 +162,8 @@ add_action( 'wp_footer', function () {
     $json = wp_json_encode( $dict, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
     echo '<script id="gtd-overrides">';
     echo '(function(){';
-    echo 'var d=' . $json . ';';
-    echo 'function lang(){var u=new URLSearchParams(window.location.search),l=u.get("lang")||u.get("hl");if(l)return l;var m=document.cookie.match(/googtrans=\/[a-z-]+\/([a-z-]+)/);if(m)return m[1];var h=document.documentElement.lang;if(h&&h!=="es")return h.split("-")[0];return null;}';
+    echo 'var d=' . $json . ',src=' . wp_json_encode( get_option( GTD_SOURCE_LANG_KEY, 'es' ) ) . ';';
+    echo 'function lang(){var u=new URLSearchParams(window.location.search),l=u.get("lang")||u.get("hl");if(l)return l;var m=document.cookie.match(/googtrans=\/[a-z-]+\/([a-z-]+)/);if(m)return m[1];var h=document.documentElement.lang;if(h&&h!==src)return h.split("-")[0];return null;}';
     echo 'function apply(root,dict){var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:function(n){return n.nodeValue.trim()?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;}},false),node;while((node=w.nextNode())){var v=node.nodeValue,c=false;for(var f in dict){if(v.indexOf(f)!==-1){v=v.split(f).join(dict[f]);c=true;}}if(c)node.nodeValue=v;}}';
     echo 'function run(){var l=lang();if(!l||!d[l])return;apply(document.body,d[l]);}';
     echo 'document.readyState==="loading"?document.addEventListener("DOMContentLoaded",run):run();';
