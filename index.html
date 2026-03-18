@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GTranslate Dictionary — Custom translation overrides for WordPress</title>
+<meta name="description" content="Stop accepting wrong automatic translations. GTranslate Dictionary lets you define exactly what words appear — language by language, word by word." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+/* ── Reset & tokens ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0b0d;
+  --bg2:       #0f1114;
+  --bg3:       #161a1f;
+  --border:    #1e2329;
+  --border2:   #2a3040;
+  --lime:      #b8f53c;
+  --lime-dim:  #8aba2a;
+  --lime-glow: rgba(184,245,60,.12);
+  --white:     #f0f2f0;
+  --muted:     #6b7585;
+  --muted2:    #8f9aa8;
+  --red:       #ff4d4d;
+  --mono:      'DM Mono', monospace;
+  --sans:      'Syne', sans-serif;
+  --radius:    10px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--sans);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ── Noise overlay ──────────────────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity: .025;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Grid lines background ──────────────────────────────────────────────── */
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 60px 60px;
+  opacity: .4;
+  pointer-events: none;
+  z-index: 0;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 0%, transparent 70%);
+}
+
+/* ── Nav ────────────────────────────────────────────────────────────────── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 48px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,11,13,.85);
+  backdrop-filter: blur(16px);
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted2);
+  text-decoration: none;
+}
+
+.nav-logo-dot {
+  width: 8px; height: 8px;
+  background: var(--lime);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--lime);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--lime); }
+  50%       { opacity: .5; box-shadow: 0 0 16px var(--lime); }
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+}
+
+.nav-links a {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  transition: color .2s;
+}
+.nav-links a:hover { color: var(--white); }
+
+.nav-cta {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--bg) !important;
+  background: var(--lime);
+  padding: 8px 18px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  letter-spacing: .04em;
+  transition: background .2s, transform .15s !important;
+}
+.nav-cta:hover { background: #ceff5a !important; transform: translateY(-1px); }
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 120px 24px 80px;
+  overflow: hidden;
+}
+
+.hero-glow {
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(184,245,60,.07) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--lime);
+  border: 1px solid rgba(184,245,60,.25);
+  background: rgba(184,245,60,.06);
+  padding: 6px 14px;
+  border-radius: 20px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+  opacity: 0;
+  animation: fadeUp .6s .1s ease forwards;
+}
+
+.hero-badge::before {
+  content: '';
+  width: 6px; height: 6px;
+  background: var(--lime);
+  border-radius: 50%;
+}
+
+h1 {
+  font-family: var(--sans);
+  font-size: clamp(42px, 8vw, 96px);
+  font-weight: 800;
+  line-height: 1.0;
+  letter-spacing: -.03em;
+  max-width: 900px;
+  opacity: 0;
+  animation: fadeUp .7s .2s ease forwards;
+}
+
+h1 em {
+  font-style: normal;
+  color: var(--lime);
+  position: relative;
+}
+
+.hero-sub {
+  font-family: var(--mono);
+  font-size: clamp(14px, 2vw, 17px);
+  color: var(--muted2);
+  max-width: 560px;
+  margin-top: 24px;
+  line-height: 1.7;
+  opacity: 0;
+  animation: fadeUp .7s .35s ease forwards;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 44px;
+  flex-wrap: wrap;
+  justify-content: center;
+  opacity: 0;
+  animation: fadeUp .7s .5s ease forwards;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--lime);
+  color: var(--bg);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 14px 28px;
+  border-radius: 8px;
+  text-decoration: none;
+  letter-spacing: .02em;
+  transition: background .2s, transform .15s, box-shadow .2s;
+  box-shadow: 0 0 0 0 rgba(184,245,60,0);
+}
+.btn-primary:hover {
+  background: #ceff5a;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(184,245,60,.25);
+}
+
+.btn-primary svg { flex-shrink: 0; }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--muted2);
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 14px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  text-decoration: none;
+  letter-spacing: .02em;
+  transition: color .2s, border-color .2s, transform .15s;
+}
+.btn-secondary:hover {
+  color: var(--white);
+  border-color: var(--muted);
+  transform: translateY(-2px);
+}
+
+/* ── Terminal mockup ────────────────────────────────────────────────────── */
+.hero-terminal {
+  position: relative;
+  margin-top: 72px;
+  width: 100%;
+  max-width: 680px;
+  opacity: 0;
+  animation: fadeUp .8s .65s ease forwards;
+}
+
+.terminal {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03);
+}
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 16px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+}
+.terminal-dot:nth-child(1) { background: #ff5f56; }
+.terminal-dot:nth-child(2) { background: #ffbd2e; }
+.terminal-dot:nth-child(3) { background: #27c93f; }
+
+.terminal-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+  margin-right: auto;
+  transform: translateX(-20px);
+}
+
+.terminal-body {
+  padding: 24px 28px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 2;
+  text-align: left;
+}
+
+.t-comment { color: var(--muted); }
+.t-key     { color: #79b8ff; }
+.t-arrow   { color: var(--muted); }
+.t-val     { color: var(--lime); }
+.t-lang    { color: #ffab70; }
+.t-brace   { color: var(--muted2); }
+.t-cursor  {
+  display: inline-block;
+  width: 8px; height: 14px;
+  background: var(--lime);
+  vertical-align: middle;
+  animation: blink .9s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ── Section commons ────────────────────────────────────────────────────── */
+section {
+  position: relative;
+  z-index: 1;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--lime);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+
+.section-sub {
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--muted2);
+  margin-top: 16px;
+  max-width: 520px;
+  line-height: 1.7;
+}
+
+/* ── Problem section ────────────────────────────────────────────────────── */
+.problem {
+  padding: 120px 0;
+  border-top: 1px solid var(--border);
+}
+
+.problem-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin-top: 60px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.problem-col {
+  padding: 40px;
+}
+
+.problem-col:first-child {
+  background: rgba(255,77,77,.04);
+  border-right: 1px solid var(--border);
+}
+
+.problem-col:last-child {
+  background: rgba(184,245,60,.04);
+}
+
+.problem-col-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.problem-col:first-child .problem-col-label { color: var(--red); }
+.problem-col:last-child  .problem-col-label { color: var(--lime); }
+
+.problem-col-label::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.problem-item {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--muted2);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+}
+
+.problem-item:last-child { border-bottom: none; }
+
+.problem-item-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Features ───────────────────────────────────────────────────────────── */
+.features {
+  padding: 120px 0;
+  border-top: 1px solid var(--border);
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-top: 64px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.feature-card {
+  background: var(--bg);
+  padding: 36px 32px;
+  transition: background .2s;
+}
+.feature-card:hover { background: var(--bg2); }
+
+.feature-icon {
+  width: 40px; height: 40px;
+  background: rgba(184,245,60,.08);
+  border: 1px solid rgba(184,245,60,.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.feature-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  letter-spacing: -.01em;
+}
+
+.feature-desc {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted2);
+  line-height: 1.7;
+}
+
+/* ── How it works ───────────────────────────────────────────────────────── */
+.howto {
+  padding: 120px 0;
+  border-top: 1px solid var(--border);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-top: 64px;
+  position: relative;
+}
+
+.steps::before {
+  content: '';
+  position: absolute;
+  top: 28px;
+  left: calc(12.5% + 20px);
+  right: calc(12.5% + 20px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border2) 20%, var(--border2) 80%, transparent);
+}
+
+.step {
+  text-align: center;
+  padding: 0 20px;
+  position: relative;
+}
+
+.step-num {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--lime);
+  margin: 0 auto 20px;
+  position: relative;
+  z-index: 1;
+  transition: border-color .2s, background .2s;
+}
+
+.step:hover .step-num {
+  border-color: var(--lime);
+  background: rgba(184,245,60,.08);
+}
+
+.step-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -.01em;
+}
+
+.step-desc {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ── Requirements ───────────────────────────────────────────────────────── */
+.requirements {
+  padding: 80px 0;
+  border-top: 1px solid var(--border);
+}
+
+.req-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.req-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.req-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.req-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 4px;
+}
+
+.req-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--white);
+}
+
+/* ── CTA ────────────────────────────────────────────────────────────────── */
+.cta-section {
+  padding: 120px 0;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.cta-glow {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 500px;
+  height: 300px;
+  background: radial-gradient(ellipse, rgba(184,245,60,.06) 0%, transparent 70%);
+  pointer-events: none;
+  top: 0;
+}
+
+.cta-section h2 {
+  font-size: clamp(32px, 5vw, 60px);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1.05;
+  max-width: 700px;
+  margin: 0 auto 24px;
+}
+
+.cta-section h2 em {
+  font-style: normal;
+  color: var(--lime);
+}
+
+.cta-meta {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.cta-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cta-meta-item::before {
+  content: '✓';
+  color: var(--lime);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.footer-left {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.footer-left a {
+  color: var(--muted2);
+  text-decoration: none;
+  transition: color .2s;
+}
+.footer-left a:hover { color: var(--lime); }
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.footer-right a {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color .2s;
+}
+.footer-right a:hover { color: var(--white); }
+
+/* ── Scroll animations ───────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .6s ease, transform .6s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  nav { padding: 16px 24px; }
+  .nav-links { display: none; }
+  .problem-grid { grid-template-columns: 1fr; }
+  .problem-col:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+  .features-grid { grid-template-columns: 1fr 1fr; }
+  .steps { grid-template-columns: 1fr 1fr; gap: 32px; }
+  .steps::before { display: none; }
+  .req-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 600px) {
+  .features-grid { grid-template-columns: 1fr; }
+  .req-grid { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: 1fr; }
+  .hero-actions { flex-direction: column; align-items: center; }
+  footer { flex-direction: column; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    gtranslate-dictionary
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how-it-works">How it works</a></li>
+    <li><a href="#requirements">Requirements</a></li>
+    <li><a href="https://github.com/adrianglezdev/gtranslate-dictionary" target="_blank">GitHub</a></li>
+    <li><a href="https://github.com/adrianglezdev/gtranslate-dictionary/releases/download/LastestVersion/gtranslate-dictionary.zip" target="_blank" class="nav-cta">Download v1.1.0</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+
+  <span class="hero-badge">Free WordPress Plugin · v1.1.0</span>
+
+  <h1>Your words.<br /><em>Your translations.</em></h1>
+
+  <p class="hero-sub">
+    GTranslate does the heavy lifting. You decide which words it gets wrong —
+    and replace them with exactly what you mean.
+  </p>
+
+  <div class="hero-actions">
+    <a href="https://github.com/adrianglezdev/gtranslate-dictionary/releases/download/LastestVersion/gtranslate-dictionary.zip" target="_blank" class="btn-primary">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1v9M4 6l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Download free
+    </a>
+    <a href="https://github.com/adrianglezdev/gtranslate-dictionary" target="_blank" class="btn-secondary">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+      </svg>
+      View on GitHub
+    </a>
+  </div>
+
+  <div class="hero-terminal">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <span class="terminal-title">gtd-dictionary.json</span>
+      </div>
+      <div class="terminal-body">
+        <span class="t-comment">// Your custom dictionary</span><br/>
+        <span class="t-brace">{</span><br/>
+        &nbsp;&nbsp;<span class="t-lang">"en"</span><span class="t-brace">:</span> <span class="t-brace">{</span><br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="t-key">"Services"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-arrow">→</span>&nbsp;&nbsp;<span class="t-val">"Our Services"</span><span class="t-brace">,</span><br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="t-key">"Contact"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-arrow">→</span>&nbsp;&nbsp;<span class="t-val">"Get in touch"</span><span class="t-brace">,</span><br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="t-key">"Little Blue House"</span> <span class="t-arrow">→</span>&nbsp;&nbsp;<span class="t-val">"Casita Azul"</span><br/>
+        &nbsp;&nbsp;<span class="t-brace">},</span><br/>
+        &nbsp;&nbsp;<span class="t-lang">"de"</span><span class="t-brace">:</span> <span class="t-brace">{</span><br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="t-key">"Dienstleistungen"</span> <span class="t-arrow">→</span>&nbsp;&nbsp;<span class="t-val">"Unsere Dienste"</span><br/>
+        &nbsp;&nbsp;<span class="t-brace">}</span><br/>
+        <span class="t-brace">}</span> <span class="t-cursor"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem" id="features">
+  <div class="container">
+    <div class="reveal">
+      <p class="section-label">The problem</p>
+      <h2 class="section-title">Automatic ≠ accurate</h2>
+      <p class="section-sub">GTranslate is powerful. But it doesn't know your brand, your tone, or your terminology.</p>
+    </div>
+
+    <div class="problem-grid reveal">
+      <div class="problem-col">
+        <div class="problem-col-label">Without this plugin</div>
+        <div class="problem-item"><span class="problem-item-icon">✗</span> Brand names get translated incorrectly</div>
+        <div class="problem-item"><span class="problem-item-icon">✗</span> Industry-specific terms sound wrong</div>
+        <div class="problem-item"><span class="problem-item-icon">✗</span> Tone and personality get lost</div>
+        <div class="problem-item"><span class="problem-item-icon">✗</span> You need the paid GTranslate plan to fix it</div>
+        <div class="problem-item"><span class="problem-item-icon">✗</span> No control without touching code</div>
+      </div>
+      <div class="problem-col">
+        <div class="problem-col-label">With GTranslate Dictionary</div>
+        <div class="problem-item"><span class="problem-item-icon">✓</span> Override any word or phrase, per language</div>
+        <div class="problem-item"><span class="problem-item-icon">✓</span> Visual interface, no code needed</div>
+        <div class="problem-item"><span class="problem-item-icon">✓</span> Works with the free GTranslate plan</div>
+        <div class="problem-item"><span class="problem-item-icon">✓</span> Changes take effect instantly</div>
+        <div class="problem-item"><span class="problem-item-icon">✓</span> 100% free and open source</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features">
+  <div class="container">
+    <div class="reveal">
+      <p class="section-label">Features</p>
+      <h2 class="section-title">Everything you need.<br/>Nothing you don't.</h2>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">🗂️</div>
+        <div class="feature-title">Per-language dictionary</div>
+        <div class="feature-desc">Configure independent overrides for each target language. English, German, French — each with its own set of rules.</div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🖱️</div>
+        <div class="feature-title">Visual interface</div>
+        <div class="feature-desc">Add, edit and delete entries directly in the WordPress admin. No JSON files, no code, no FTP.</div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🏠</div>
+        <div class="feature-title">Configurable source language</div>
+        <div class="feature-desc">Your site isn't in Spanish? No problem. Set any language as the origin and the plugin adapts automatically.</div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">Zero-config frontend</div>
+        <div class="feature-desc">Overrides are injected automatically via a tiny JS snippet. No shortcodes, no template edits required.</div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🔒</div>
+        <div class="feature-title">Free forever</div>
+        <div class="feature-desc">No premium plan. No license key. No feature walls. Works entirely with the free tier of GTranslate.</div>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🧠</div>
+        <div class="feature-title">Smart detection</div>
+        <div class="feature-desc">Detects the active language via cookie, URL parameter or HTML lang attribute — covering all GTranslate modes.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="howto" id="how-it-works">
+  <div class="container">
+    <div class="reveal" style="text-align:center">
+      <p class="section-label">How it works</p>
+      <h2 class="section-title">Up and running in minutes</h2>
+    </div>
+
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">01</div>
+        <div class="step-title">Download</div>
+        <div class="step-desc">Grab the .zip from GitHub Releases. No account needed.</div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">02</div>
+        <div class="step-title">Install</div>
+        <div class="step-desc">Upload via Plugins → Add New → Upload Plugin in WordPress.</div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">03</div>
+        <div class="step-title">Configure</div>
+        <div class="step-desc">Open GT Dictionary, set your source language, add target languages and enter your overrides.</div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">04</div>
+        <div class="step-title">Clear cache</div>
+        <div class="step-desc">Save and clear your site cache. Overrides appear immediately on the frontend.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REQUIREMENTS -->
+<section class="requirements" id="requirements">
+  <div class="container">
+    <div class="reveal">
+      <p class="section-label">Requirements</p>
+      <h2 class="section-title">Minimal dependencies</h2>
+    </div>
+
+    <div class="req-grid">
+      <div class="req-card reveal">
+        <span class="req-icon">🔷</span>
+        <div>
+          <div class="req-label">WordPress</div>
+          <div class="req-value">6.5 or higher</div>
+        </div>
+      </div>
+      <div class="req-card reveal">
+        <span class="req-icon">🐘</span>
+        <div>
+          <div class="req-label">PHP</div>
+          <div class="req-value">7.0 or higher</div>
+        </div>
+      </div>
+      <div class="req-card reveal">
+        <span class="req-icon">🌐</span>
+        <div>
+          <div class="req-label">GTranslate plugin</div>
+          <div class="req-value">Free plan · any version</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container" style="position:relative">
+    <div class="cta-glow"></div>
+    <div class="reveal">
+      <h2>Ready to speak your<br/><em>visitors' language?</em></h2>
+      <a href="https://github.com/adrianglezdev/gtranslate-dictionary/releases/download/LastestVersion/gtranslate-dictionary.zip" target="_blank" class="btn-primary" style="margin-top:40px; font-size:15px; padding:16px 36px;">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1v9M4 6l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Download v1.1.0 — it's free
+      </a>
+      <div class="cta-meta">
+        <span class="cta-meta-item">GPL v2 License</span>
+        <span class="cta-meta-item">No account required</span>
+        <span class="cta-meta-item">Open source</span>
+        <span class="cta-meta-item">Works with free GTranslate</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">
+    Built by <a href="https://github.com/adrianglezdev" target="_blank">Adrián González</a> · GPL v2
+  </div>
+  <div class="footer-right">
+    <a href="https://github.com/adrianglezdev/gtranslate-dictionary" target="_blank">GitHub</a>
+    <a href="https://github.com/adrianglezdev/gtranslate-dictionary/releases/download/LastestVersion/gtranslate-dictionary.zip" target="_blank">Releases</a>
+    <a href="https://github.com/adrianglezdev/gtranslate-dictionary/blob/main/README.md" target="_blank">Docs</a>
+  </div>
+</footer>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      setTimeout(() => entry.target.classList.add('visible'), i * 80);
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
