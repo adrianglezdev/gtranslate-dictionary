@@ -1,6 +1,6 @@
 # GTranslate Dictionary
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Author:** [Adrián González](https://github.com/adrianglezdev)  
 **License:** GPL v2  
 **Requires WordPress:** 6.5+  
