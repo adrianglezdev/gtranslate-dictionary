@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       GTranslate Dictionary
- * Plugin URI:        https://your-plugin-url.com/
+ * Plugin URI:        https://github.com/adrianglezdev/gtranslate-dictionary
  * Description:       Lets you define custom word and phrase overrides for GTranslate. Instead of relying solely on automatic translations, you can build a per-language dictionary from a visual interface — no coding required. Overrides are injected automatically on the frontend.
  * Version:           1.0.0
  * Author:            Adrián González
